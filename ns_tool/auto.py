@@ -4,7 +4,7 @@
   2. Show last month's journey history.
   3. Select the work trips (same logic as the interactive CLI).
   4. Click Download and save the PDF to ./downloads/.
-  5. Send the PDF to Telegram, with the selected trips listed for review.
+  5. Send the PDF to Telegram.
 
 On any failure it sends a screenshot + page HTML instead, so you know to
 do that month by hand.
@@ -30,7 +30,7 @@ from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
 
-from .cli import format_plan, open_browser, select_and_declare
+from .cli import open_browser, select_and_declare
 from .config import DEFAULT_CONFIG_PATH, load_config
 
 logger = logging.getLogger(__name__)
@@ -143,13 +143,19 @@ def _telegram(method: str, fields: dict[str, str], document: Path | None = None)
             raise RuntimeError(f"Telegram {method} failed")
 
 
+def send_document(path: Path) -> None:
+    _telegram("sendDocument", {"chat_id": os.environ["TELEGRAM_CHAT_ID"]}, path)
+
+
 def notify(title: str, body: str, attachments: list[Path]) -> None:
     """Send a message, then each attachment, to TELEGRAM_CHAT_ID."""
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
     # Telegram caps a message at 4096 characters.
-    _telegram("sendMessage", {"chat_id": chat_id, "text": f"{title}\n\n{body}"[:4096]})
+    _telegram(
+        "sendMessage",
+        {"chat_id": os.environ["TELEGRAM_CHAT_ID"], "text": f"{title}\n\n{body}"[:4096]},
+    )
     for path in attachments:
-        _telegram("sendDocument", {"chat_id": chat_id}, path)
+        send_document(path)
 
 
 def main() -> None:
@@ -203,11 +209,7 @@ def main() -> None:
         finally:
             browser.close()
 
-    notify(
-        f"NS commute statement {label}",
-        format_plan(trips, config.work_stations),
-        [pdf],
-    )
+    send_document(pdf)
     print(f"Sent {pdf.name} to Telegram")
 
 

@@ -73,10 +73,9 @@ previous month):
 0 9 15 * * cd ~/ns-tool && set -a && . ./.env && set +a && ~/.local/bin/uv run -m ns_tool.auto >> auto.log 2>&1
 ```
 
-The Telegram message lists every selected trip so you can review the
-PDF before forwarding it. If anything fails (wrong login, NS changed its
-page), you get a "FAILED" message instead, with a screenshot and the page
-HTML attached.
+On success you get just the PDF. If anything fails (wrong login, NS
+changed its page), you get a "FAILED" message instead, with a screenshot
+and the page HTML attached.
 
 On a desktop, `--headed` shows the browser while it runs.
 
