@@ -22,10 +22,15 @@ class ScrapedRow(TypedDict):
 
 logger = logging.getLogger(__name__)
 
+# English ("Monday September 1, 2026") or Dutch ("maandag 1 september
+# 2026") day headings -- only used to group trips by day, so either works.
 DATE_RE = (
     r"(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+"
     r"(January|February|March|April|May|June|July|August|September|October|November|December)"
     r"\s+\d{1,2},\s+\d{4}"
+    r"|(maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\s+\d{1,2}\s+"
+    r"(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december)"
+    r"\s+\d{4}"
 )
 
 # Pierce shadow DOM. Injected once via add_init_script so every
@@ -89,7 +94,7 @@ SCRAPE_ROWS_JS = (
 () => {
     const DATE_RE = /"""
     + DATE_RE
-    + r"""/;
+    + r"""/i;
     const { deepText, deepCheckboxCount, rowText } = window.__ns;
 
     const items = [];

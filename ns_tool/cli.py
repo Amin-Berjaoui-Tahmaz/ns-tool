@@ -27,7 +27,8 @@ import threading
 import time
 from pathlib import Path
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Browser, BrowserContext, Page, Playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 from .config import DEFAULT_CONFIG_PATH, load_config, run_setup_wizard
@@ -99,24 +100,24 @@ def collect_trips(page: Page) -> list[Trip]:
 # --------------------------------------------------------------------------
 
 
-def print_dry_run(
+def format_plan(
     work_trips: list[Trip],
     work_stations: list[str],
-) -> None:
-    """Print what the bot is about to select."""
+) -> str:
+    """Describe what the bot is about to select, grouped by day."""
 
     by_day: dict[str, list[Trip]] = {}
 
     for trip in work_trips:
         by_day.setdefault(trip.date, []).append(trip)
 
-    print(
-        f"\n[PLAN] {len(work_trips)} trip(s) will be checked "
+    lines = [
+        f"{len(work_trips)} trip(s) checked "
         f"across {len(by_day)} day(s):\n"
-    )
+    ]
 
     for date, day_trips in by_day.items():
-        print(f"  {date}")
+        lines.append(f"  {date}")
 
         for trip in sorted(
             day_trips,
@@ -128,12 +129,12 @@ def print_dry_run(
                 else "  (connecting leg)"
             )
 
-            print(
+            lines.append(
                 f"    {trip.checkin}-{trip.checkout}  "
                 f"{trip.dep_station} -> {trip.dest_station}{tag}"
             )
 
-    print()
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------
@@ -209,17 +210,14 @@ def check_trips(
 # --------------------------------------------------------------------------
 
 
-def run_one_period(
+def select_and_declare(
     page: Page,
     work_stations: list[str],
     max_gap_minutes: int,
-    download_dir: Path,
-) -> bool:
-    """Process the currently displayed period.
-
-    Returns True if a download was successfully saved.
-    Returns False if there were no matching trips.
-    """
+    home_stations: list[str],
+) -> list[Trip]:
+    """Scan the currently displayed period, check the work trips and switch
+    to the declarations view. Returns the checked trips ([] if none)."""
 
     # The page should already be showing the selected period.
     page.wait_for_load_state("networkidle")
@@ -254,6 +252,7 @@ def run_one_period(
         trips,
         work_stations,
         max_gap_minutes,
+        home_stations,
     )
 
     if not work_trips:
@@ -264,16 +263,13 @@ def run_one_period(
             "Check that the correct period is displayed and "
             "that your work stations match the station names."
         )
-        return False
+        return []
 
     # --------------------------------------------------------------
     # Show what will happen
     # --------------------------------------------------------------
 
-    print_dry_run(
-        work_trips,
-        work_stations,
-    )
+    print(f"\n[PLAN] {format_plan(work_trips, work_stations)}\n")
 
     # NO CONFIRMATION.
     #
@@ -309,6 +305,27 @@ def run_one_period(
         f"\nSwitched to declarations view "
         f"({declared_count} declared)."
     )
+
+    return work_trips
+
+
+def run_one_period(
+    page: Page,
+    work_stations: list[str],
+    max_gap_minutes: int,
+    home_stations: list[str],
+    download_dir: Path,
+) -> bool:
+    """Process the currently displayed period.
+
+    Returns True if a download was successfully saved.
+    Returns False if there were no matching trips.
+    """
+
+    if not select_and_declare(
+        page, work_stations, max_gap_minutes, home_stations
+    ):
+        return False
 
     print(
         "\nReview the declarations in the browser."
@@ -418,6 +435,64 @@ def parse_args() -> argparse.Namespace:
 # --------------------------------------------------------------------------
 
 
+def open_browser(
+    p: Playwright, *, headless: bool
+) -> tuple[Browser, BrowserContext]:
+    """Launch Chromium with the NS-friendly settings and our JS helpers.
+
+    Headed runs use the locally installed Chrome; headless runs (the
+    unattended server job) use Playwright's bundled Chromium so the server
+    only needs `playwright install chromium`."""
+
+    browser = p.chromium.launch(
+        headless=headless,
+        channel=None if headless else "chrome",
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-features=PrintPreviewUI",
+            "--disable-pdf-viewer-app",
+            "--disable-extensions",
+            "--disable-plugins-discovery",
+            "--allow-file-access-from-files",
+        ],
+    )
+
+    context = browser.new_context(
+        accept_downloads=True,
+        locale="en-GB",
+        viewport={
+            "width": 1400,
+            "height": 900,
+        },
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 "
+            "(KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+    )
+
+    # Hide webdriver flag.
+    context.add_init_script(
+        """
+        Object.defineProperty(
+            navigator,
+            'webdriver',
+            {
+                get: () => undefined
+            }
+        );
+        """
+    )
+
+    # Install our shadow-DOM helpers.
+    context.add_init_script(
+        JS_HELPERS
+    )
+
+    return browser, context
+
+
 class _BrowserClosed(Exception):
     """Internal signal: the browser window was closed by the person,
     rather than via Ctrl+C. Used purely for control flow in main()."""
@@ -481,50 +556,7 @@ def main() -> None:
     # --------------------------------------------------------------
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            channel="chrome",
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-features=PrintPreviewUI",
-                "--disable-pdf-viewer-app",
-                "--disable-extensions",
-                "--disable-plugins-discovery",
-                "--allow-file-access-from-files",
-            ],
-        )
-
-        context = browser.new_context(
-            accept_downloads=True,
-            viewport={
-                "width": 1400,
-                "height": 900,
-            },
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-        )
-
-        # Hide webdriver flag.
-        context.add_init_script(
-            """
-            Object.defineProperty(
-                navigator,
-                'webdriver',
-                {
-                    get: () => undefined
-                }
-            );
-            """
-        )
-
-        # Install our shadow-DOM helpers.
-        context.add_init_script(
-            JS_HELPERS
-        )
+        browser, context = open_browser(p, headless=False)
 
         # --------------------------------------------------------------
         # On-page control: a floating button on the NS site itself, so
@@ -655,6 +687,7 @@ def main() -> None:
                         page=active_page,
                         work_stations=work_stations,
                         max_gap_minutes=max_gap_minutes,
+                        home_stations=config.home_stations,
                         download_dir=download_dir,
                     )
                 except Exception:

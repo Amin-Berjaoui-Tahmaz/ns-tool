@@ -111,14 +111,61 @@ def build_chains(trips: list[Trip], max_gap_minutes: int) -> list[list[Trip]]:
     return chains
 
 
+def at_station(station: str, names: Sequence[str]) -> bool:
+    """Whole-word, case-insensitive match, so "Rotterdam Zuid" doesn't also
+    match "Rotterdam Zuidplein"."""
+    return any(re.search(rf"\b{re.escape(n)}\b", station, re.I) for n in names)
+
+
+def split_at_home(day_trips: list[Trip], home_stations: Sequence[str]) -> list[list[Trip]]:
+    """Splits one day's trips (sorted chronologically) into home-to-home
+    journeys: a journey starts on a leg leaving home and ends on a leg
+    arriving home. Station names and transfer gaps in between don't matter,
+    so a checkout at one stop and a check-in at another still stay linked."""
+    journeys: list[list[Trip]] = []
+    current: list[Trip] = []
+    for t in day_trips:
+        if current and at_station(t.dep_station, home_stations):
+            journeys.append(current)
+            current = []
+        current.append(t)
+        if at_station(t.dest_station, home_stations):
+            journeys.append(current)
+            current = []
+    if current:
+        journeys.append(current)
+    return journeys
+
+
 def select_work_chains(
-    trips: list[Trip], work_stations: Sequence[str], max_gap_minutes: int
+    trips: list[Trip],
+    work_stations: Sequence[str],
+    max_gap_minutes: int,
+    home_stations: Sequence[str] = (),
 ) -> list[Trip]:
-    """Returns the flat list of Trips belonging to a chain that touches any
-    work_stations entry on at least one leg."""
+    """Returns the flat list of Trips belonging to a journey that touches any
+    work_stations entry on at least one leg.
+
+    Days that pass through a home station are split into home-to-home
+    journeys (split_at_home); other days fall back to gap/station chaining
+    (build_chains)."""
+    groups: list[list[Trip]] = []
+    for _date, day in groupby(
+        sorted(trips, key=lambda t: (t.date, to_minutes(t.checkin))),
+        key=lambda t: t.date,
+    ):
+        day_trips = list(day)
+        if home_stations and any(
+            at_station(t.dep_station, home_stations)
+            or at_station(t.dest_station, home_stations)
+            for t in day_trips
+        ):
+            groups += split_at_home(day_trips, home_stations)
+        else:
+            groups += build_chains(day_trips, max_gap_minutes)
     return [
         t
-        for chain in build_chains(trips, max_gap_minutes)
-        if any(touches_work(t, work_stations) for t in chain)
-        for t in chain
+        for group in groups
+        if any(touches_work(t, work_stations) for t in group)
+        for t in group
     ]

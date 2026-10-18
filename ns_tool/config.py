@@ -7,6 +7,9 @@ where you run the tool from (or wherever --config points).
       - Sliedrecht
       - Ketelhaven
     max_gap_minutes: 20
+    home_stations:      # optional: select whole home-to-home journeys
+      - Rijnhaven
+      - Rotterdam Zuid
 
 If config.yaml doesn't exist, built-in defaults are used -- see
 DEFAULT_WORK_STATIONS / DEFAULT_MAX_TRANSFER_GAP_MINUTES below. CLI flags
@@ -15,7 +18,7 @@ DEFAULT_WORK_STATIONS / DEFAULT_MAX_TRANSFER_GAP_MINUTES below. CLI flags
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -30,6 +33,7 @@ DEFAULT_CONFIG_PATH = Path("config.yaml")
 class Config:
     work_stations: list[str]
     max_gap_minutes: int
+    home_stations: list[str] = field(default_factory=list)
 
 
 def _resolve_config_path(path: Path | None = None) -> Path:
@@ -73,7 +77,13 @@ def load_config(path: Path | None = None) -> Config:
     if not isinstance(max_gap_minutes, int) or isinstance(max_gap_minutes, bool):
         raise ValueError(f"{resolved_path}: 'max_gap_minutes' must be an integer")
 
-    return Config(work_stations, max_gap_minutes)
+    home_stations = data.get("home_stations", [])
+    if not isinstance(home_stations, list) or not all(
+        isinstance(s, str) for s in home_stations
+    ):
+        raise ValueError(f"{resolved_path}: 'home_stations' must be a list of strings")
+
+    return Config(work_stations, max_gap_minutes, home_stations)
 
 
 def run_setup_wizard(path: Path = DEFAULT_CONFIG_PATH) -> Config:
@@ -106,12 +116,19 @@ def run_setup_wizard(path: Path = DEFAULT_CONFIG_PATH) -> Config:
         int(gap_input) if gap_input else DEFAULT_MAX_TRANSFER_GAP_MINUTES
     )
 
-    config = Config(work_stations, max_gap_minutes)
+    homes_input = input(
+        "Home station name(s), comma-separated (optional, Enter to skip): "
+    ).strip()
+    home_stations = [s.strip() for s in homes_input.split(",") if s.strip()]
+
+    config = Config(work_stations, max_gap_minutes, home_stations)
 
     path.write_text(
         "work_stations:\n"
         + "".join(f"  - {s}\n" for s in work_stations)
         + f"max_gap_minutes: {max_gap_minutes}\n"
+        + ("home_stations:\n" if home_stations else "")
+        + "".join(f"  - {s}\n" for s in home_stations)
     )
 
     print(f"\nSaved to {path}. Edit it by hand any time, or delete it to be asked again.\n")

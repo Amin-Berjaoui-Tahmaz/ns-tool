@@ -87,13 +87,14 @@ def test_load_config_default_path_uses_package_config_when_available(
 
 def test_run_setup_wizard_writes_answers_to_file(monkeypatch, tmp_path):
     path = tmp_path / "config.yaml"
-    answers = iter(["Papendrecht, Dordrecht", "15"])
+    answers = iter(["Papendrecht, Dordrecht", "15", "Rijnhaven, Rotterdam Zuid"])
     monkeypatch.setattr("builtins.input", lambda _: next(answers))
 
     config = run_setup_wizard(path)
 
     assert config.work_stations == ["Papendrecht", "Dordrecht"]
     assert config.max_gap_minutes == 15
+    assert config.home_stations == ["Rijnhaven", "Rotterdam Zuid"]
 
     # And loading the file back gives the same thing -- the wizard's
     # output is valid input for load_config.
