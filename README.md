@@ -33,8 +33,8 @@ work_stations:
   - Ketelhaven
 max_gap_minutes: 20
 home_stations:
-  - Rijnhaven
-  - Rotterdam Zuid
+  - Delft
+  - Amsterdam Zuid
 ```
 
 ## Automatic monthly run (server)
@@ -109,12 +109,12 @@ A real commute is several trip segments back to back. With
 `home_stations` set, each day is split into **home-to-home journeys**: a
 journey starts on a segment leaving home and ends on one arriving home.
 Any journey that touches a work station is selected in full, so legs like
-"Rijnhaven -> Zuidplein" come along even though they never mention work:
+"Delft -> Den Haag HS" come along even though they never mention work:
 
 ```
- Rijnhaven ─► Zuidplein ─► Sliedrecht ··· Sliedrecht ─► Ridderkerk   Zuidplein ─► Rijnhaven
- └───────────────────────────── one journey, all selected ─────────────────────────────┘
-          starts leaving home                                    ends arriving home
+ Delft ─► Den Haag HS ─► Sliedrecht ··· Sliedrecht ─► Breda   Den Haag HS ─► Delft
+ └────────────────────────── one journey, all selected ───────────────────────────┘
+   starts leaving home                                          ends arriving home
 ```
 
 Station names and transfer gaps between segments don't matter, so a

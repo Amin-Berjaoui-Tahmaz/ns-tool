@@ -8,8 +8,8 @@ where you run the tool from (or wherever --config points).
       - Ketelhaven
     max_gap_minutes: 20
     home_stations:      # optional: select whole home-to-home journeys
-      - Rijnhaven
-      - Rotterdam Zuid
+      - Delft
+      - Amsterdam Zuid
 
 If config.yaml doesn't exist, built-in defaults are used -- see
 DEFAULT_WORK_STATIONS / DEFAULT_MAX_TRANSFER_GAP_MINUTES below. CLI flags

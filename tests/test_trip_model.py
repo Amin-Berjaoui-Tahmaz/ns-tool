@@ -206,46 +206,46 @@ def test_select_work_chains_excludes_non_work_chains():
 
 
 # --------------------------------------------------------------------------
-# home-to-home journeys (cases taken from a real monthly statement)
+# home-to-home journeys (made-up home stations and times)
 # --------------------------------------------------------------------------
 
-HOME = ["Rijnhaven", "Rotterdam Zuid"]
+HOME = ["Delft", "Amsterdam Zuid"]
 WORK = ["Sliedrecht", "Ketelhaven"]
 
 
 def test_home_journey_survives_checkout_checkin_station_mismatch():
-    # Bus checked out at Ridderkerk, checked in again at Zuidplein: station
+    # Bus checked out at Breda, checked in again at Den Haag HS: station
     # chaining breaks here and used to drop the last leg home.
-    d = "Wednesday September 2, 2026"
+    d = "Wednesday March 4, 2026"
     trips = [
-        _trip(d, "08:30", "Rijnhaven", "08:35", "Zuidplein"),
-        _trip(d, "08:38", "Rotterdam, Zuidplein (perron G", "09:14", "Sliedrecht, Station Baanhoek"),
-        _trip(d, "17:21", "Sliedrecht, Station Baanhoek", "18:14", "Ridderkerk, Oostendam"),
-        _trip(d, "18:15", "Zuidplein", "18:20", "Rijnhaven"),
+        _trip(d, "07:50", "Delft", "08:00", "Den Haag HS"),
+        _trip(d, "08:05", "Den Haag HS", "09:00", "Sliedrecht, Station Baanhoek"),
+        _trip(d, "17:00", "Sliedrecht, Station Baanhoek", "18:00", "Breda"),
+        _trip(d, "18:01", "Den Haag HS", "18:10", "Delft"),
     ]
     assert len(select_work_chains(trips, WORK, 20, HOME)) == 4
     assert len(select_work_chains(trips, WORK, 20)) == 3  # old behaviour
 
 
 def test_home_journey_excludes_non_work_evening_trip():
-    d = "Tuesday September 1, 2026"
+    d = "Tuesday March 3, 2026"
     trips = [
-        _trip(d, "08:17", "Rijnhaven", "08:22", "Zuidplein"),
-        _trip(d, "08:24", "Rotterdam, Zuidplein (perron G", "09:03", "Sliedrecht, Station Baanhoek"),
-        _trip(d, "17:36", "Sliedrecht Baanhoek", "17:49", "Dordrecht"),
-        _trip(d, "17:49", "Dordrecht", "18:20", "Rotterdam Centraal"),
-        _trip(d, "18:20", "Rotterdam Centraal", "18:30", "Rijnhaven"),
-        _trip(d, "20:00", "Rijnhaven", "20:10", "Rotterdam Centraal"),
+        _trip(d, "07:45", "Delft", "07:55", "Den Haag HS"),
+        _trip(d, "08:00", "Den Haag HS", "08:50", "Sliedrecht, Station Baanhoek"),
+        _trip(d, "17:10", "Sliedrecht Baanhoek", "17:25", "Dordrecht"),
+        _trip(d, "17:30", "Dordrecht", "18:00", "Rotterdam Centraal"),
+        _trip(d, "18:05", "Rotterdam Centraal", "18:20", "Delft"),
+        _trip(d, "20:00", "Delft", "20:15", "Rotterdam Centraal"),
     ]
     selected = select_work_chains(trips, WORK, 20, HOME)
-    assert [t.checkin for t in selected] == ["08:17", "08:24", "17:36", "17:49", "18:20"]
+    assert [t.checkin for t in selected] == ["07:45", "08:00", "17:10", "17:30", "18:05"]
 
 
 def test_home_station_is_whole_word():
-    assert at_station("Rotterdam Zuid", HOME)
-    assert at_station("Rotterdam, Rijnhaven", HOME)
-    assert not at_station("Rotterdam Zuidplein", HOME)
-    assert not at_station("Rotterdam, Zuidplein (perron G", HOME)
+    assert at_station("Amsterdam Zuid", HOME)
+    assert at_station("Delft, Station", HOME)
+    assert not at_station("Amsterdam Zuidas", HOME)
+    assert not at_station("Amsterdam, Zuidplein", HOME)
 
 
 def test_day_without_home_falls_back_to_chaining():

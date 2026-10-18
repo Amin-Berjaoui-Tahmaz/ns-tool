@@ -112,8 +112,8 @@ def build_chains(trips: list[Trip], max_gap_minutes: int) -> list[list[Trip]]:
 
 
 def at_station(station: str, names: Sequence[str]) -> bool:
-    """Whole-word, case-insensitive match, so "Rotterdam Zuid" doesn't also
-    match "Rotterdam Zuidplein"."""
+    """Whole-word, case-insensitive match, so "Amsterdam Zuid" doesn't also
+    match "Amsterdam Zuidas"."""
     return any(re.search(rf"\b{re.escape(n)}\b", station, re.I) for n in names)
 
 
