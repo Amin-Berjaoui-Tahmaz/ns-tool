@@ -1,7 +1,9 @@
 import re
 from datetime import date
 
-from ns_tool.auto import month_bounds, notify
+import pytest
+
+from ns_tool.auto import PERIOD_OPTIONS, month_bounds, notify, period_option
 from ns_tool.ns_dom import DATE_RE
 
 
@@ -9,6 +11,23 @@ def test_month_bounds():
     assert month_bounds(date(2026, 9, 30)) == (date(2026, 9, 1), date(2026, 9, 30))
     assert month_bounds(date(2024, 2, 1)) == (date(2024, 2, 1), date(2024, 2, 29))
     assert month_bounds(date(2026, 12, 15)) == (date(2026, 12, 1), date(2026, 12, 31))
+
+
+def test_period_option_only_this_or_last_month():
+    today = date(2026, 10, 18)
+    assert period_option(date(2026, 10, 1), today) == "this"
+    assert period_option(date(2026, 9, 1), today) == "last"
+    assert period_option(date(2025, 12, 1), date(2026, 1, 15)) == "last"
+    with pytest.raises(RuntimeError, match="by hand"):
+        period_option(date(2026, 8, 1), today)
+
+
+def test_period_dropdown_labels_match_real_page():
+    # Option texts from the real Reishistorie page.
+    labels = [" Laatste 7 dagen ", " Deze maand ", " Vorige maand ", " Afgelopen jaar ",
+              " Afgelopen 1,5 jaar ", " Kies handmatig "]
+    hits = {k: [l.strip() for l in labels if re.search(p, l, re.I)] for k, p in PERIOD_OPTIONS.items()}
+    assert hits == {"this": ["Deze maand"], "last": ["Vorige maand"]}
 
 
 def test_date_headings_english_and_dutch():

@@ -65,33 +65,52 @@ def login(page: Page, email: str, password: str) -> None:
     _click_if_present(page, r"weiger|decline|reject|noodzakelijk|necessary")
 
 
-def show_period(page: Page, start: date, end: date) -> None:
-    """Open Journey history and show start..end.
+PERIOD_OPTIONS = {
+    "this": r"deze maand|this month",
+    "last": r"vorige maand|last month|previous month",
+}
 
-    ponytail: selectors are best guesses written without seeing the logged-in
-    page; if they miss, the failure message's screenshot + HTML says what to fix.
+
+def period_option(start: date, today: date) -> str:
+    """Which entry of NS's period dropdown covers the month starting at `start`.
+
+    ponytail: only "this month" / "last month" from the dropdown; older months
+    need NS's "Kies handmatig" date picker, add it if backfills are ever needed.
     """
+    this_month = today.replace(day=1)
+    if start == this_month:
+        return "this"
+    if start == (this_month - timedelta(days=1)).replace(day=1):
+        return "last"
+    raise RuntimeError(
+        f"NS's period dropdown only covers this month and last month; get {start:%B %Y} by hand."
+    )
+
+
+def show_period(page: Page, option: str) -> None:
+    """Open Reishistorie, pick this/last month in the period dropdown, click Tonen."""
     page.get_by_role(
         "link", name=re.compile(r"journey history|reishistorie|reistransacties", re.I)
     ).first.click()
-    page.wait_for_load_state("networkidle")
+    select = page.locator("#filter-period-control")
+    select.wait_for(timeout=30000)
 
-    dates = page.locator("input[type=date]")
-    if dates.count() >= 2:
-        fmt = "%Y-%m-%d"
-    else:
-        dates = page.locator("input[placeholder*='dd' i], input[name*='date' i], input[id*='date' i]")
-        fmt = "%d-%m-%Y"
-    if dates.count() < 2:
-        raise RuntimeError("Couldn't find the period's start/end date fields.")
-    dates.nth(0).fill(start.strftime(fmt))
-    dates.nth(1).fill(end.strftime(fmt))
+    labels = select.locator("option").all_inner_texts()
+    index = next(
+        (i for i, label in enumerate(labels) if re.search(PERIOD_OPTIONS[option], label, re.I)),
+        None,
+    )
+    if index is None:
+        raise RuntimeError(f"No '{option} month' entry in the period dropdown: {labels}")
+    select.select_option(index=index)
 
-    page.get_by_role("button", name=re.compile(r"^\s*(show|toon|tonen)\b", re.I)).first.click()
+    page.locator("mns-transaction-filter nes-button").click()
 
 
 def download_statement(page: Page, download_dir: Path) -> Path:
-    button = page.locator("button, a").filter(has_text=re.compile("download", re.I)).last
+    button = page.locator("mns-transaction-download-bar nes-button").filter(
+        has_text=re.compile("download", re.I)
+    )
     with page.expect_download(timeout=60000) as info:
         button.click()
     target = download_dir / info.value.suggested_filename
@@ -142,10 +161,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     config = load_config(args.config)
-    start, end = month_bounds(
+    today = date.today()
+    start = (
         date.fromisoformat(args.month + "-01")
         if args.month
-        else date.today().replace(day=1) - timedelta(days=1)
+        else (today.replace(day=1) - timedelta(days=1)).replace(day=1)
     )
     label = start.strftime("%B %Y")
 
@@ -157,7 +177,7 @@ def main() -> None:
         page = context.new_page()
         try:
             login(page, os.environ["NS_EMAIL"], os.environ["NS_PASSWORD"])
-            show_period(page, start, end)
+            show_period(page, period_option(start, today))
             trips = select_and_declare(
                 page, config.work_stations, config.max_gap_minutes, config.home_stations
             )

@@ -60,10 +60,10 @@ For Telegram:
 If the token ever leaks, someone can act as that bot but has no access
 to your own Telegram account. Revoke it with `/revoke` in BotFather.
 
-Try it once by hand. `--month` re-fetches a specific month:
+Try it once by hand (`--month YYYY-MM` also works, but only for this month or last month: those are the entries in NS's period dropdown):
 
 ```bash
-set -a && . ./.env && set +a && uv run -m ns_tool.auto --month 2026-09
+set -a && . ./.env && set +a && uv run -m ns_tool.auto
 ```
 
 Then schedule it with `crontab -e` (09:00 on the 15th, fetches the
