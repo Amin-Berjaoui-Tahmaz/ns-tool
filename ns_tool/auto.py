@@ -13,6 +13,7 @@ Environment (put these in .env, see README):
   NS_EMAIL, NS_PASSWORD             Mijn NS login
   TELEGRAM_BOT_TOKEN                from @BotFather
   TELEGRAM_CHAT_ID                  your chat with that bot
+  TELEGRAM_THREAD_ID                optional: topic in that chat (unset = main chat)
 """
 
 from __future__ import annotations
@@ -120,6 +121,8 @@ def download_statement(page: Page, download_dir: Path) -> Path:
 
 def _telegram(method: str, fields: dict[str, str], document: Path | None = None) -> None:
     """POST one multipart/form-data call to the Telegram Bot API."""
+    if thread_id := os.environ.get("TELEGRAM_THREAD_ID"):
+        fields = {**fields, "message_thread_id": thread_id}
     boundary = uuid.uuid4().hex
     body = b"".join(
         f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()

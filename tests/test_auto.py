@@ -56,6 +56,7 @@ def test_notify_sends_message_then_pdf(monkeypatch, tmp_path):
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
+    monkeypatch.setenv("TELEGRAM_THREAD_ID", "7")
     pdf = tmp_path / "statement.pdf"
     pdf.write_bytes(b"%PDF-1.4")
 
@@ -64,6 +65,7 @@ def test_notify_sends_message_then_pdf(monkeypatch, tmp_path):
     message, document = sent
     assert message.full_url == "https://api.telegram.org/bot123:abc/sendMessage"
     assert b'name="chat_id"\r\n\r\n42\r\n' in message.data
+    assert all(b'name="message_thread_id"\r\n\r\n7\r\n' in r.data for r in sent)
     assert b"x" * 5000 not in message.data  # trimmed to Telegram's 4096 cap
     assert document.full_url.endswith("/sendDocument")
     assert b'filename="statement.pdf"' in document.data
